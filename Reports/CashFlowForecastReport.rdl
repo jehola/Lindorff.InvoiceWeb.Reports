@@ -128,7 +128,7 @@ SELECT	Docs.[Entry No_],
 		AND 
 	(((c.[Customer Legal Type] = @CompanyValue AND @Company IN (@CustomerType)) OR
 	(c.[Customer Legal Type] = @ConsumerValue AND @Consumer IN (@CustomerType))) OR
-	(c.[Customer Legal Type] IS NULL AND @Empty IN (@CustomerType)))
+	(c.[Customer Legal Type] = '' AND @Empty IN (@CustomerType)))
        GROUP BY	cle.[Entry No_],
 		cle.[Customer No_],
 		cle.[Document Type], 
