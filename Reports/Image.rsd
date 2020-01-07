@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<SharedDataSet xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner" xmlns="http://schemas.microsoft.com/sqlserver/reporting/2010/01/shareddatasetdefinition">
+  <DataSet Name="">
+    <Query>
+      <DataSourceReference>NavisionConfiguration</DataSourceReference>
+      <CommandText>SELECT ImageBits
+FROM dbo.[Image]
+WHERE ImageID = 1</CommandText>
+    </Query>
+    <Fields>
+      <Field Name="ImageBits">
+        <DataField>ImageBits</DataField>
+        <rd:TypeName>System.Byte[]</rd:TypeName>
+      </Field>
+    </Fields>
+    <Collation>Latin1_General_100</Collation>
+  </DataSet>
+</SharedDataSet>

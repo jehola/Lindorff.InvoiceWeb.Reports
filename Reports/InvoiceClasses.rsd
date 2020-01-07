@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<SharedDataSet xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner" xmlns="http://schemas.microsoft.com/sqlserver/reporting/2010/01/shareddatasetdefinition">
+  <DataSet Name="">
+    <Query>
+      <DataSourceReference>Navision_ODS_FI</DataSourceReference>
+      <DataSetParameters>
+        <DataSetParameter Name="@Client">
+          <ReadOnly>false</ReadOnly>
+          <Nullable>false</Nullable>
+          <OmitFromQuery>false</OmitFromQuery>
+          <rd:DbType>Object</rd:DbType>
+        </DataSetParameter>
+      </DataSetParameters>
+      <CommandText>DECLARE @CurrentClient VARCHAR(30) = (SELECT TOP 1 [ClientId] FROM [Company] WHERE [Name] = @Client);
+
+SELECT DISTINCT(R.InvoiceClass) AS InvoiceClass  FROM
+(SELECT DISTINCT([Invoice Class]) AS InvoiceClass FROM [Navision_ODS_FI].[dbo].[Sales Invoice Header] WHERE ClientID = @CurrentClient
+UNION
+SELECT DISTINCT([Invoice Class]) AS InvoiceClass FROM [Navision_ODS_FI].[dbo].[Sales Cr_Memo Header] WHERE ClientID = @CurrentClient
+UNION SELECT '') AS R 
+ORDER BY R.InvoiceClass</CommandText>
+    </Query>
+    <Fields>
+      <Field Name="InvoiceClass">
+        <DataField>InvoiceClass</DataField>
+        <rd:TypeName>System.String</rd:TypeName>
+      </Field>
+    </Fields>
+  </DataSet>
+</SharedDataSet>

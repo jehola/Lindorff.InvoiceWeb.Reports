@@ -1,0 +1,1162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Report xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner" xmlns:cl="http://schemas.microsoft.com/sqlserver/reporting/2010/01/componentdefinition" xmlns="http://schemas.microsoft.com/sqlserver/reporting/2010/01/reportdefinition">
+  <AutoRefresh>0</AutoRefresh>
+  <DataSources>
+    <DataSource Name="Navision_ODS_FI">
+      <DataSourceReference>Navision_ODS_FI</DataSourceReference>
+      <rd:SecurityType>None</rd:SecurityType>
+      <rd:DataSourceID>f1364ca6-b2bd-40ce-aa7b-b581d011e2c2</rd:DataSourceID>
+    </DataSource>
+  </DataSources>
+  <DataSets>
+    <DataSet Name="Labels">
+      <SharedDataSet>
+        <SharedDataSetReference>Labels</SharedDataSetReference>
+        <QueryParameters>
+          <QueryParameter Name="@Language">
+            <Value>=Parameters!Language.Value</Value>
+          </QueryParameter>
+        </QueryParameters>
+      </SharedDataSet>
+      <Fields>
+        <Field Name="ID">
+          <DataField>ID</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Language">
+          <DataField>Language</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Description">
+          <DataField>Description</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="CompanyInformation">
+      <Query>
+        <DataSourceName>Navision_ODS_FI</DataSourceName>
+        <QueryParameters>
+          <QueryParameter Name="@ClientId">
+            <Value>=Parameters!ClientId.Value</Value>
+          </QueryParameter>
+        </QueryParameters>
+        <CommandText>SELECT [Name] FROM [Company Information] WHERE [ClientId] =  (SELECT TOP 1 [ClientId] FROM [vwCompany] WHERE [Name] = @ClientId)</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="Name">
+          <DataField>Name</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="Receivables">
+      <Query>
+        <DataSourceName>Navision_ODS_FI</DataSourceName>
+        <QueryParameters>
+          <QueryParameter Name="@StartDate">
+            <Value>=Parameters!StartDate.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@ClientId">
+            <Value>=Parameters!ClientId.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@EndDate">
+            <Value>=Parameters!EndDate.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@Dimension1">
+            <Value>=Parameters!Dimension1.Value</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
+          <QueryParameter Name="@Dimension2">
+            <Value>=Parameters!Dimension2.Value</Value>
+            <rd:UserDefined>true</rd:UserDefined>
+          </QueryParameter>
+          <QueryParameter Name="@CompanyValue">
+            <Value>="E"</Value>
+          </QueryParameter>
+          <QueryParameter Name="@Company">
+            <Value>="Company"</Value>
+          </QueryParameter>
+          <QueryParameter Name="@CustomerType">
+            <Value>=Parameters!CustomerType.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@ConsumerValue">
+            <Value>=""</Value>
+          </QueryParameter>
+          <QueryParameter Name="@Consumer">
+            <Value>="Consumer"</Value>
+          </QueryParameter>
+          <QueryParameter Name="@Empty">
+            <Value>="NoCustomerType"</Value>
+          </QueryParameter>
+        </QueryParameters>
+        <CommandText>DECLARE @CurrentClient VARCHAR(30) = (SELECT TOP 1 [ClientId] FROM [vwCompany] WHERE [Name] = @ClientId); 
+DECLARE @Receivables TABLE(	
+	OpenBalance DECIMAL(38, 20) NOT NULL,
+	InvoicesAmount DECIMAL(38, 20) NOT NULL,
+	CreditInvoicesAmount DECIMAL(38, 20) NOT NULL,
+	RemindersAmount DECIMAL(38, 20) NOT NULL,
+	ReferencePaymentAmount DECIMAL(38, 20) NOT NULL,
+	ManualPaymentAmount DECIMAL(38, 20) NOT NULL,
+	CollectionPaymentsAmount DECIMAL(38, 20) NOT NULL,
+	CreditLossesAmount DECIMAL(38, 20) NOT NULL,
+	OtherAmount DECIMAL(38, 20) NOT NULL);
+
+INSERT INTO @Receivables
+(
+	OpenBalance,
+	InvoicesAmount,
+	CreditInvoicesAmount,
+	RemindersAmount,
+	ReferencePaymentAmount,
+	ManualPaymentAmount,
+	CollectionPaymentsAmount,
+	CreditLossesAmount,
+	OtherAmount
+)
+SELECT      
+	COALESCE((SELECT SUM([Amount (LCY)]) FROM [Detailed Cust_ Ledg_ Entry] WHERE ClientID = @CurrentClient AND [Posting Date] &lt;= DATEADD(day,-1, @StartDate)), 0) AS OpenBalance,
+	COALESCE(SUM(CASE WHEN dcle.[Document Type] = 2 AND dcle.[Entry Type] = 1 THEN dcle.[Amount (LCY)] ELSE 0 END), 0) AS InvoicesAmount,
+	COALESCE(SUM(CASE WHEN dcle.[Document Type] = 3 AND dcle.[Entry Type] = 1 THEN dcle.[Amount (LCY)] ELSE 0 END), 0) AS CreditInvoicesAmount,
+	COALESCE(SUM(CASE WHEN dcle.[Document Type] = 5 AND dcle.[Entry Type] = 1 THEN dcle.[Amount (LCY)] ELSE 0 END), 0) AS RemindersAmount,
+	COALESCE(SUM(CASE WHEN dcle.[Document Type] = 1 AND dcle.[Document No_] LIKE 'S%' AND dcle.[Entry Type] IN (1, 5, 6, 7, 8, 9, 11, 12, 13) THEN dcle.[Amount (LCY)] ELSE 0 END), 0) AS ReferencePaymentAmount,
+	COALESCE(SUM(CASE WHEN dcle.[Document Type] IN (0, 1) AND dcle.[Document No_] LIKE 'M%' AND dcle.[Entry Type] IN (1, 5, 6, 7, 8, 9, 11, 12, 13) THEN dcle.[Amount (LCY)] ELSE 0 END), 0) AS ManualPaymentAmount,
+	COALESCE(SUM(CASE WHEN dcle.[Document Type] IN (0, 1) AND (dcle.[Document No_] LIKE '[TU]%' AND dcle.[Document No_] NOT LIKE 'TLP%') AND dcle.[Entry Type] IN (1, 5, 6, 7, 8, 9, 11, 12, 13) THEN dcle.[Amount (LCY)] ELSE 0 END), 0) AS CollectionPaymentsAmount,
+	COALESCE(SUM(CASE WHEN dcle.[Document Type] IN (0, 1) AND dcle.[Document No_] LIKE 'L%' AND dcle.[Entry Type] = 1 THEN dcle.[Amount (LCY)] ELSE 0 END), 0) AS CreditLossesAmount,
+	COALESCE(SUM(CASE WHEN dcle.[Document Type] IN (0, 1) AND (dcle.[Document No_] NOT LIKE '[SMTLU]%' OR dcle.[Document No_] LIKE 'TLP%') AND dcle.[Entry Type] = 1 THEN dcle.[Amount (LCY)] ELSE 0 END), 0) AS OtherAmount 
+FROM	
+	[Detailed Cust_ Ledg_ Entry] AS dcle
+	LEFT JOIN [Cust_ Ledger Entry] AS cle ON (dcle.[ClientID] = cle.[ClientID] AND dcle.[Cust_ Ledger Entry No_] = cle.[Entry No_])
+	LEFT JOIN [Customer] AS c ON (c.[ClientID] = cle.[ClientID] AND cle.[Customer No_] = c.[No_])
+WHERE	
+	dcle.ClientID = @CurrentClient 
+	AND dcle.[Posting Date] BETWEEN @StartDate AND @EndDate
+	AND cle.[Global Dimension 1 Code] in (@Dimension1)
+	AND cle.[Global Dimension 2 Code] in (@Dimension2)
+	AND (((c.[Customer Legal Type] = @CompanyValue AND @Company IN (@CustomerType))
+	OR (c.[Customer Legal Type] = @ConsumerValue AND @Consumer IN (@CustomerType)))
+	OR (c.[Customer Legal Type] is NULL AND @Empty IN (@CustomerType)))
+		
+SELECT 1 AS [EntryNo], 'OpenBalance' AS [Accounts receivables], OpenBalance FROM @Receivables
+UNION SELECT 2, 'Invoices', InvoicesAmount FROM @Receivables		
+UNION SELECT 3, 'CreditInvoices', CreditInvoicesAmount FROM @Receivables
+UNION SELECT 4, 'Reminders', RemindersAmount FROM @Receivables	
+UNION SELECT 5, 'ReferencePayments', ReferencePaymentAmount FROM @Receivables	
+UNION SELECT 6, 'ManualPayments', ManualPaymentAmount FROM @Receivables	
+UNION SELECT 7, 'CollectionPayments', CollectionPaymentsAmount FROM @Receivables	
+UNION SELECT 8, 'CreditLosses', CreditLossesAmount FROM @Receivables	
+UNION SELECT 9, 'Other', OtherAmount FROM @Receivables</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="EntryNo">
+          <DataField>EntryNo</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="Accounts_receivables">
+          <DataField>Accounts receivables</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="OpenBalance">
+          <DataField>OpenBalance</DataField>
+          <rd:TypeName>System.Decimal</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="Dimensions1">
+      <SharedDataSet>
+        <SharedDataSetReference>Dimensions1</SharedDataSetReference>
+        <QueryParameters>
+          <QueryParameter Name="@Client">
+            <Value>=Parameters!ClientId.Value</Value>
+          </QueryParameter>
+        </QueryParameters>
+      </SharedDataSet>
+      <Fields>
+        <Field Name="Value">
+          <DataField>Value</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Label">
+          <DataField>Label</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="Dimensions2">
+      <SharedDataSet>
+        <SharedDataSetReference>Dimensions2</SharedDataSetReference>
+        <QueryParameters>
+          <QueryParameter Name="@Client">
+            <Value>=Parameters!ClientId.Value</Value>
+          </QueryParameter>
+        </QueryParameters>
+      </SharedDataSet>
+      <Fields>
+        <Field Name="Value">
+          <DataField>Value</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Label">
+          <DataField>Label</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="Image">
+      <SharedDataSet>
+        <SharedDataSetReference>Image</SharedDataSetReference>
+      </SharedDataSet>
+      <Fields>
+        <Field Name="ImageBits">
+          <DataField>ImageBits</DataField>
+          <rd:TypeName>System.Byte[]</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+  </DataSets>
+  <ReportSections>
+    <ReportSection>
+      <Body>
+        <ReportItems>
+          <Tablix Name="Tablix3">
+            <TablixBody>
+              <TablixColumns>
+                <TablixColumn>
+                  <Width>4.4in</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>1.52395in</Width>
+                </TablixColumn>
+              </TablixColumns>
+              <TablixRows>
+                <TablixRow>
+                  <Height>0.25in</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Accounts_receivables">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=IIF(RowNumber("Receivables") = 1, Code.GetLabel(Parameters!Labels,"OpeningBalance") &amp; " " &amp;Format(Parameters!StartDate.Value, "dd.MM.yyyy"), Code.GetLabel(Parameters!Labels, Fields!Accounts_receivables.Value))</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>=IIF(RowNumber("Receivables") = 1, "Bold", "Default")</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Accounts_receivables</rd:DefaultName>
+                          <DataElementName>Accounts_Receivables</DataElementName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>None</Style>
+                            </Border>
+                            <BackgroundColor>=IIF(RowNumber("Receivables") = 1, "#d9d9d9", "White")</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="OpenBalance">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=CDbl(Fields!OpenBalance.Value)</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>=IIF(RowNumber("Receivables") = 1, "Bold", "Default")</FontWeight>
+                                    <Format>n2</Format>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>OpenBalance</rd:DefaultName>
+                          <DataElementName>Open_Balance</DataElementName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>None</Style>
+                            </Border>
+                            <BackgroundColor>=IIF(RowNumber("Receivables") = 1, "#d9d9d9", "White")</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+                <TablixRow>
+                  <Height>0.15in</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox23">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value />
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>=IIF(RowNumber("Receivables") = 1, "Bold", "Default")</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox23</rd:DefaultName>
+                          <DataElementOutput>NoOutput</DataElementOutput>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>None</Style>
+                            </Border>
+                            <VerticalAlign>Middle</VerticalAlign>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox24">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value />
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>=IIF(RowNumber("Receivables") = 1, "Bold", "Default")</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox24</rd:DefaultName>
+                          <DataElementOutput>NoOutput</DataElementOutput>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>None</Style>
+                            </Border>
+                            <VerticalAlign>Middle</VerticalAlign>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+                <TablixRow>
+                  <Height>0.25in</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox26">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Code.GetLabel(Parameters!Labels,"ClosingBalance") &amp; " " &amp;Format(Parameters!EndDate.Value, "dd.MM.yyyy")</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox26</rd:DefaultName>
+                          <DataElementOutput>NoOutput</DataElementOutput>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>None</Style>
+                            </Border>
+                            <BackgroundColor>#d9d9d9</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox27">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Cdbl(Sum(Fields!OpenBalance.Value))</Value>
+                                  <Style>
+                                    <FontSize>8pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                    <Format>n2</Format>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox27</rd:DefaultName>
+                          <DataElementOutput>NoOutput</DataElementOutput>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>None</Style>
+                            </Border>
+                            <BackgroundColor>#d9d9d9</BackgroundColor>
+                            <VerticalAlign>Middle</VerticalAlign>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+              </TablixRows>
+            </TablixBody>
+            <TablixColumnHierarchy>
+              <TablixMembers>
+                <TablixMember />
+                <TablixMember />
+              </TablixMembers>
+            </TablixColumnHierarchy>
+            <TablixRowHierarchy>
+              <TablixMembers>
+                <TablixMember>
+                  <Group Name="Details" />
+                  <TablixMembers>
+                    <TablixMember />
+                    <TablixMember />
+                  </TablixMembers>
+                </TablixMember>
+                <TablixMember>
+                  <KeepWithGroup>Before</KeepWithGroup>
+                </TablixMember>
+              </TablixMembers>
+            </TablixRowHierarchy>
+            <DataSetName>Receivables</DataSetName>
+            <PageName>Receivables change</PageName>
+            <Top>2.75097in</Top>
+            <Height>0.65in</Height>
+            <Width>5.92395in</Width>
+            <Visibility>
+              <Hidden>=Not(Parameters!IsValid.Value)</Hidden>
+            </Visibility>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+            </Style>
+          </Tablix>
+          <Textbox Name="Textbox7">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>=Code.GetLabel(Parameters!Labels,"AccountsReceivablesChange")</Value>
+                    <Style>
+                      <FontWeight>Bold</FontWeight>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox7</rd:DefaultName>
+            <Top>2.50097in</Top>
+            <Height>0.25in</Height>
+            <Width>5.92395in</Width>
+            <ZIndex>1</ZIndex>
+            <Visibility>
+              <Hidden>=Not(Parameters!IsValid.Value)</Hidden>
+            </Visibility>
+            <DataElementOutput>NoOutput</DataElementOutput>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox8">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>=Variables!ErrorMessage.Value</Value>
+                    <Style>
+                      <FontSize>12pt</FontSize>
+                      <FontWeight>Bold</FontWeight>
+                      <Color>Red</Color>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox7</rd:DefaultName>
+            <Top>3.41486in</Top>
+            <Height>0.89583in</Height>
+            <Width>5.92395in</Width>
+            <ZIndex>2</ZIndex>
+            <DataElementOutput>NoOutput</DataElementOutput>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Image Name="CompanyLogo">
+            <Source>Database</Source>
+            <Value>=First(Fields!ImageBits.Value,"Image")</Value>
+            <MIMEType>image/jpeg</MIMEType>
+            <Sizing>FitProportional</Sizing>
+            <Top>0.05in</Top>
+            <Height>0.69in</Height>
+            <Width>3.68542in</Width>
+            <ZIndex>3</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+            </Style>
+          </Image>
+          <Textbox Name="Textbox1">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>=First(Fields!Name.Value, "CompanyInformation")</Value>
+                    <Style>
+                      <FontFamily>Georgia</FontFamily>
+                      <FontWeight>Bold</FontWeight>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox1</rd:DefaultName>
+            <Top>0.78366in</Top>
+            <Height>0.25in</Height>
+            <Width>3.68542in</Width>
+            <ZIndex>4</ZIndex>
+            <DataElementOutput>NoOutput</DataElementOutput>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox2">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>=Code.GetLabel(Parameters!Labels, "ReceivablePostingReport")</Value>
+                    <Style>
+                      <FontFamily>Georgia</FontFamily>
+                      <FontWeight>Bold</FontWeight>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox2</rd:DefaultName>
+            <Top>1.16315in</Top>
+            <Height>0.25in</Height>
+            <Width>3.68542in</Width>
+            <ZIndex>5</ZIndex>
+            <DataElementOutput>NoOutput</DataElementOutput>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox3">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>=Code.GetLabel(Parameters!Labels,"ReportingPeriod")&amp;":"</Value>
+                    <Style>
+                      <FontFamily>Georgia</FontFamily>
+                      <FontWeight>Bold</FontWeight>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox3</rd:DefaultName>
+            <Top>1.54264in</Top>
+            <Height>0.25in</Height>
+            <Width>1.9in</Width>
+            <ZIndex>6</ZIndex>
+            <DataElementOutput>NoOutput</DataElementOutput>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox4">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>=Format(Parameters!StartDate.Value,"dd.MM.yyyy") &amp; " - " &amp; Format(Parameters!EndDate.Value,"dd.MM.yyyy")</Value>
+                    <Style>
+                      <FontFamily>Georgia</FontFamily>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style>
+                  <TextAlign>Right</TextAlign>
+                </Style>
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox4</rd:DefaultName>
+            <Top>1.54264in</Top>
+            <Left>1.9in</Left>
+            <Height>0.25in</Height>
+            <Width>1.78542in</Width>
+            <ZIndex>7</ZIndex>
+            <DataElementOutput>NoOutput</DataElementOutput>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox5">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>=Code.GetLabel(Parameters!Labels,"RunningDate")&amp;":"</Value>
+                    <Style>
+                      <FontFamily>Georgia</FontFamily>
+                      <FontWeight>Bold</FontWeight>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox5</rd:DefaultName>
+            <Top>1.54264in</Top>
+            <Left>4.4in</Left>
+            <Height>0.25in</Height>
+            <Width>1.52395in</Width>
+            <ZIndex>8</ZIndex>
+            <DataElementOutput>NoOutput</DataElementOutput>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox6">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>=Format(Globals!ExecutionTime, "dd.MM.yyyy")</Value>
+                    <Style>
+                      <FontFamily>Georgia</FontFamily>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox6</rd:DefaultName>
+            <Top>1.54264in</Top>
+            <Left>5.92395in</Left>
+            <Height>0.25in</Height>
+            <Width>1.67444in</Width>
+            <ZIndex>9</ZIndex>
+            <DataElementOutput>NoOutput</DataElementOutput>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox9">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>=Code.GetLabel(Parameters!Labels,"Dimension") + " 1:"</Value>
+                    <Style>
+                      <FontWeight>Bold</FontWeight>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox9</rd:DefaultName>
+            <Top>2.18153in</Top>
+            <Height>0.25in</Height>
+            <Width>1.9in</Width>
+            <ZIndex>10</ZIndex>
+            <DataElementOutput>NoOutput</DataElementOutput>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox10">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>=IIf(CountRows("Dimensions1") = Parameters!Dimension1.Count,Code.GetLabel(Parameters!Labels,"All"),Join(Parameters!Dimension1.Label, ", "))</Value>
+                    <Style>
+                      <FontFamily>Georgia</FontFamily>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox10</rd:DefaultName>
+            <Top>2.18153in</Top>
+            <Left>1.9in</Left>
+            <Height>0.25in</Height>
+            <Width>1.78542in</Width>
+            <ZIndex>11</ZIndex>
+            <DataElementOutput>NoOutput</DataElementOutput>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox11">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>=Code.GetLabel(Parameters!Labels,"Dimension") + " 2:"</Value>
+                    <Style>
+                      <FontWeight>Bold</FontWeight>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox11</rd:DefaultName>
+            <Top>2.18153in</Top>
+            <Left>4.4in</Left>
+            <Height>0.25in</Height>
+            <Width>1.52395in</Width>
+            <ZIndex>12</ZIndex>
+            <DataElementOutput>NoOutput</DataElementOutput>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox12">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>=IIf(CountRows("Dimensions2") = Parameters!Dimension2.Count,Code.GetLabel(Parameters!Labels,"All"),Join(Parameters!Dimension2.Label, ", "))</Value>
+                    <Style>
+                      <FontFamily>Georgia</FontFamily>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox12</rd:DefaultName>
+            <Top>2.18153in</Top>
+            <Left>5.92395in</Left>
+            <Height>0.25in</Height>
+            <Width>1.67444in</Width>
+            <ZIndex>13</ZIndex>
+            <DataElementOutput>NoOutput</DataElementOutput>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox13">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>=Code.GetLabel(Parameters!Labels,"CustomerType")&amp;":"</Value>
+                    <Style>
+                      <FontWeight>Bold</FontWeight>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox13</rd:DefaultName>
+            <Top>1.86208in</Top>
+            <Height>0.25in</Height>
+            <Width>1.9in</Width>
+            <ZIndex>14</ZIndex>
+            <DataElementOutput>NoOutput</DataElementOutput>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="Textbox14">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>=IIf(Parameters!CustomerType.Count &gt; 2,Code.GetLabel(Parameters!Labels,"All"), Join(Parameters!CustomerType.Label, ", "))</Value>
+                    <Style>
+                      <FontFamily>Georgia</FontFamily>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox14</rd:DefaultName>
+            <Top>1.86208in</Top>
+            <Left>1.9in</Left>
+            <Height>0.25in</Height>
+            <Width>1.78542in</Width>
+            <ZIndex>15</ZIndex>
+            <DataElementOutput>NoOutput</DataElementOutput>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+        </ReportItems>
+        <Height>4.43888in</Height>
+        <Style />
+      </Body>
+      <Width>7.59839in</Width>
+      <Page>
+        <PageHeight>8.27in</PageHeight>
+        <PageWidth>11.69in</PageWidth>
+        <LeftMargin>0.3937in</LeftMargin>
+        <RightMargin>0.3937in</RightMargin>
+        <TopMargin>0.3937in</TopMargin>
+        <BottomMargin>0.3937in</BottomMargin>
+        <Style />
+      </Page>
+    </ReportSection>
+  </ReportSections>
+  <ReportParameters>
+    <ReportParameter Name="Language">
+      <DataType>String</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>en-US</Value>
+        </Values>
+      </DefaultValue>
+      <Prompt>Language</Prompt>
+      <Hidden>true</Hidden>
+      <ValidValues>
+        <ParameterValues>
+          <ParameterValue>
+            <Value>en-US</Value>
+            <Label>en-US</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>fi-FI</Value>
+            <Label>fi-FI</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>sv-SE</Value>
+            <Label>sv-SE</Label>
+          </ParameterValue>
+        </ParameterValues>
+      </ValidValues>
+    </ReportParameter>
+    <ReportParameter Name="Labels">
+      <DataType>String</DataType>
+      <DefaultValue>
+        <DataSetReference>
+          <DataSetName>Labels</DataSetName>
+          <ValueField>ID</ValueField>
+        </DataSetReference>
+      </DefaultValue>
+      <Prompt>Labels</Prompt>
+      <Hidden>true</Hidden>
+      <ValidValues>
+        <DataSetReference>
+          <DataSetName>Labels</DataSetName>
+          <ValueField>ID</ValueField>
+          <LabelField>Description</LabelField>
+        </DataSetReference>
+      </ValidValues>
+      <MultiValue>true</MultiValue>
+    </ReportParameter>
+    <ReportParameter Name="ClientId">
+      <DataType>String</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>KSS Energia Oy</Value>
+        </Values>
+      </DefaultValue>
+      <Prompt>Client</Prompt>
+      <Hidden>true</Hidden>
+    </ReportParameter>
+    <ReportParameter Name="StartDate">
+      <DataType>DateTime</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>7/1/2016 12:00:00 AM</Value>
+        </Values>
+      </DefaultValue>
+      <Prompt>Start date</Prompt>
+    </ReportParameter>
+    <ReportParameter Name="EndDate">
+      <DataType>DateTime</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>7/27/2016 12:00:00 AM</Value>
+        </Values>
+      </DefaultValue>
+      <Prompt>End date</Prompt>
+    </ReportParameter>
+    <ReportParameter Name="Dimension1">
+      <DataType>String</DataType>
+      <DefaultValue>
+        <DataSetReference>
+          <DataSetName>Dimensions1</DataSetName>
+          <ValueField>Value</ValueField>
+        </DataSetReference>
+      </DefaultValue>
+      <AllowBlank>true</AllowBlank>
+      <Prompt>Dimension1</Prompt>
+      <ValidValues>
+        <DataSetReference>
+          <DataSetName>Dimensions1</DataSetName>
+          <ValueField>Value</ValueField>
+          <LabelField>Label</LabelField>
+        </DataSetReference>
+      </ValidValues>
+      <MultiValue>true</MultiValue>
+    </ReportParameter>
+    <ReportParameter Name="Dimension2">
+      <DataType>String</DataType>
+      <DefaultValue>
+        <DataSetReference>
+          <DataSetName>Dimensions2</DataSetName>
+          <ValueField>Value</ValueField>
+        </DataSetReference>
+      </DefaultValue>
+      <AllowBlank>true</AllowBlank>
+      <Prompt>Dimension2</Prompt>
+      <ValidValues>
+        <DataSetReference>
+          <DataSetName>Dimensions2</DataSetName>
+          <ValueField>Value</ValueField>
+          <LabelField>Label</LabelField>
+        </DataSetReference>
+      </ValidValues>
+      <MultiValue>true</MultiValue>
+    </ReportParameter>
+    <ReportParameter Name="CustomerType">
+      <DataType>String</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>NoCustomerType</Value>
+          <Value>Consumer</Value>
+          <Value>Company</Value>
+        </Values>
+      </DefaultValue>
+      <Prompt>CustomerType</Prompt>
+      <ValidValues>
+        <ParameterValues>
+          <ParameterValue>
+            <Value>NoCustomerType</Value>
+            <Label>=Code.GetLabel(Parameters!Labels,"Empty")</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>Consumer</Value>
+            <Label>=Code.GetLabel(Parameters!Labels,"Consumer")</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>Company</Value>
+            <Label>=Code.GetLabel(Parameters!Labels,"Enterprise")</Label>
+          </ParameterValue>
+        </ParameterValues>
+      </ValidValues>
+      <MultiValue>true</MultiValue>
+    </ReportParameter>
+    <ReportParameter Name="IsValid">
+      <DataType>Boolean</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>=Parameters!StartDate.Value &gt;= CDate("1/1/1980") AND Parameters!StartDate.Value &lt;= Parameters!EndDate.Value</Value>
+        </Values>
+      </DefaultValue>
+      <Prompt>IsValid</Prompt>
+      <Hidden>true</Hidden>
+    </ReportParameter>
+  </ReportParameters>
+  <Code>Public Function GetLabel(P as Parameter, Label as String) as String
+   Dim i As Integer
+   For i = 0 to Ubound(P.Value)
+      If (P.Value(i) = Label) Then Return P.Label(i)
+   Next i
+   Return Label
+End Function</Code>
+  <Variables>
+    <Variable Name="ErrorMessage">
+      <Value>=IIf(Parameters!StartDate.Value &gt;= CDate("1/1/1980"), "", Replace(Code.GetLabel(Parameters!Labels,"ErrorStartDateGreaterThenMinLimit"), "{0}", "1") + VbCRLF) +
+IIf(Parameters!StartDate.Value &lt;= Parameters!EndDate.Value, "", Replace(Replace(Code.GetLabel(Parameters!Labels,"ErrorEndDateLessThenStartDate"), "{0}", "1"), "{1}", "2") + VbCRLF)</Value>
+    </Variable>
+  </Variables>
+  <rd:ReportUnitType>Inch</rd:ReportUnitType>
+  <rd:ReportID>114bf37a-ab01-4db8-934c-cf56f6e3da9d</rd:ReportID>
+</Report>
